@@ -7,12 +7,9 @@ import (
 	"log"
 	"os"
 
-	// "github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 
-	// "go.mongodb.org/mongo-driver/bson"
-	// "go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -29,7 +26,7 @@ var collection *mongo.Collection
 
 func main() {
 
-	fmt.Println("hello world")
+	fmt.Println("Server started")
 
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -57,8 +54,8 @@ func main() {
 
 	app.Get("/api/todos", getTodos)
 	app.Post("/api/todos", createTodos)
-	// app.Patch("/api/todos/:id", updateTodos)
-	// app.Delete("/api/todos/:id", getTodos)
+	app.Patch("/api/todos/:id", updateTodos)
+	app.Delete("/api/todos/:id", deleteTodos)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -112,5 +109,50 @@ func createTodos(c *fiber.Ctx) error {
 	todo.ID = insertResult.InsertedID.(primitive.ObjectID)
 	return c.Status(201).JSON(todo)
 
+}
 
+func updateTodos(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+	ObjectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
+
+	}
+
+	var todo Todo
+	if err := c.BodyParser(&todo); err != nil {
+		return err
+	}
+
+	if todo.Body == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Update todo body cannot be empty"})
+	}
+
+	filter := bson.M{"_id": ObjectID}
+	update := bson.M{"$set": bson.M{"body": todo.Body, "completed": todo.Completed}}
+
+	updatedResult, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+
+	return c.Status(200).JSON(updatedResult)
+}
+
+func deleteTodos(c *fiber.Ctx) error {
+	id := c.Params("id")
+	ObjectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
+
+	}
+
+	filter := bson.M{"_id": ObjectID}
+	deletedResult, err := collection.DeleteOne(context.Background(), filter)
+	if err != nil {
+		return err
+	}
+
+	return c.Status(200).JSON(deletedResult)
 }
